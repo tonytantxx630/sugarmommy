@@ -8,7 +8,7 @@ function badRequest(message: string, status = 400) {
 }
 
 export async function GET() {
-  const records = listRecords();
+  const records = await listRecords();
   return NextResponse.json(records);
 }
 
@@ -38,6 +38,11 @@ export async function POST(req: Request) {
     return badRequest("sugarLevel out of range");
   }
 
-  const row = insertRecord({ mealType, sugarLevel: sugarInt, comment: typeof comment === "string" ? comment : null });
+  const row = await insertRecord({
+    mealType,
+    sugarLevel: sugarInt,
+    comment: typeof comment === "string" ? comment : null,
+  });
+
   return NextResponse.json(row, { status: 201 });
 }

@@ -13,9 +13,18 @@ A minimal web app to record and visualize blood glucose readings.
 ## Tech
 
 - Next.js (App Router) + TypeScript + Tailwind
-- SQLite database at `./data/app.db` (created automatically)
+- Postgres (Neon via Vercel Marketplace) using `POSTGRES_URL` / `DATABASE_URL`
 
 ## Local development
+
+1) Ensure you have a Postgres connection string in your environment:
+
+- `POSTGRES_URL` (recommended)
+- or `DATABASE_URL`
+
+If you created Postgres via Vercel/Neon, you can copy the connection string from the Vercel Storage integration.
+
+2) Run:
 
 ```bash
 npm install

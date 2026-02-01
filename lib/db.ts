@@ -1,6 +1,4 @@
-import fs from "node:fs";
-import path from "node:path";
-import Database from "better-sqlite3";
+import { neon } from "@neondatabase/serverless";
 
 export type MealType = "empty stomach" | "after meal";
 
@@ -12,66 +10,79 @@ export type RecordRow = {
   created_at: string; // ISO
 };
 
-export function openDb(dbFilePath: string) {
-  const dir = path.dirname(dbFilePath);
-  fs.mkdirSync(dir, { recursive: true });
+function getConnString(): string {
+  // Neon integration typically injects POSTGRES_URL or DATABASE_URL.
+  const url =
+    process.env.POSTGRES_URL ||
+    process.env.POSTGRES_PRISMA_URL ||
+    process.env.DATABASE_URL ||
+    process.env.POSTGRES_URL_NON_POOLING;
 
-  const db = new Database(dbFilePath);
-  db.pragma("journal_mode = WAL");
-
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS records (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      meal_type TEXT NOT NULL,
-      sugar_level INTEGER NOT NULL,
-      comment TEXT,
-      created_at TEXT NOT NULL
+  if (!url) {
+    throw new Error(
+      "Missing database connection string. Set POSTGRES_URL (recommended) or DATABASE_URL in env."
     );
-
-    CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(created_at);
-    CREATE INDEX IF NOT EXISTS idx_records_meal_type ON records(meal_type);
-  `);
-
-  return db;
+  }
+  return url;
 }
 
-let _db: ReturnType<typeof openDb> | null = null;
+let schemaReady: Promise<void> | null = null;
 
-export function getDb() {
-  if (_db) return _db;
-  const dbPath = process.env.SUGARMOMMY_DB_PATH || path.join(process.cwd(), "data", "app.db");
-  _db = openDb(dbPath);
-  return _db;
+async function ensureSchema() {
+  if (schemaReady) return schemaReady;
+
+  schemaReady = (async () => {
+    const sql = neon(getConnString());
+
+    await sql`
+      CREATE TABLE IF NOT EXISTS records (
+        id SERIAL PRIMARY KEY,
+        meal_type TEXT NOT NULL,
+        sugar_level INTEGER NOT NULL,
+        comment TEXT,
+        created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+      );
+    `;
+
+    await sql`CREATE INDEX IF NOT EXISTS idx_records_created_at ON records(created_at);`;
+    await sql`CREATE INDEX IF NOT EXISTS idx_records_meal_type ON records(meal_type);`;
+  })();
+
+  return schemaReady;
 }
 
-export function listRecords(): RecordRow[] {
-  const db = getDb();
-  const stmt = db.prepare(
-    `SELECT id, meal_type, sugar_level, comment, created_at
-     FROM records
-     ORDER BY datetime(created_at) ASC, id ASC`
-  );
-  return stmt.all() as RecordRow[];
+export async function listRecords(): Promise<RecordRow[]> {
+  await ensureSchema();
+  const sql = neon(getConnString());
+
+  const rows = await sql`
+    SELECT id, meal_type, sugar_level, comment,
+           to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at
+    FROM records
+    ORDER BY created_at ASC, id ASC;
+  `;
+
+  return rows as unknown as RecordRow[];
 }
 
-export function insertRecord(input: { mealType: MealType; sugarLevel: number; comment?: string | null }): RecordRow {
-  const db = getDb();
-  const createdAt = new Date().toISOString();
+export async function insertRecord(input: {
+  mealType: MealType;
+  sugarLevel: number;
+  comment?: string | null;
+}): Promise<RecordRow> {
+  await ensureSchema();
+  const sql = neon(getConnString());
+
   const comment = input.comment?.trim() ? input.comment.trim() : null;
 
-  const stmt = db.prepare(
-    `INSERT INTO records (meal_type, sugar_level, comment, created_at)
-     VALUES (?, ?, ?, ?)`
-  );
-  const info = stmt.run(input.mealType, input.sugarLevel, comment, createdAt);
+  const rows = await sql`
+    INSERT INTO records (meal_type, sugar_level, comment)
+    VALUES (${input.mealType}, ${input.sugarLevel}, ${comment})
+    RETURNING id, meal_type, sugar_level, comment,
+              to_char(created_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS created_at;
+  `;
 
-  const row = db
-    .prepare(
-      `SELECT id, meal_type, sugar_level, comment, created_at
-       FROM records
-       WHERE id = ?`
-    )
-    .get(info.lastInsertRowid as number) as RecordRow;
-
-  return row;
+  const typed = rows as unknown as RecordRow[];
+  if (!typed[0]) throw new Error("Insert failed");
+  return typed[0];
 }

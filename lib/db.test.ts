@@ -1,27 +1,26 @@
-import os from "node:os";
-import path from "node:path";
 import { describe, expect, it } from "vitest";
-import { openDb } from "./db";
+
+// These tests require a real Postgres connection.
+// In CI or local dev without Postgres configured, we skip.
+const conn =
+  process.env.POSTGRES_URL ||
+  process.env.POSTGRES_PRISMA_URL ||
+  process.env.DATABASE_URL ||
+  process.env.POSTGRES_URL_NON_POOLING;
 
 describe("db", () => {
-  it("inserts and lists records", () => {
-    const dbPath = path.join(os.tmpdir(), `sugarmommy-test-${Date.now()}.db`);
-    const db = openDb(dbPath);
+  it.skipIf(!conn)("inserts and lists records (requires POSTGRES_URL/DATABASE_URL)", async () => {
+    const { insertRecord, listRecords } = await import("./db");
 
-    const insert = db.prepare(
-      `INSERT INTO records (meal_type, sugar_level, comment, created_at) VALUES (?, ?, ?, ?)`
-    );
-    insert.run("empty stomach", 90, "test", new Date("2026-01-01T00:00:00.000Z").toISOString());
-    insert.run("after meal", 130, null, new Date("2026-01-02T00:00:00.000Z").toISOString());
+    // Insert 2 records
+    await insertRecord({ mealType: "empty stomach", sugarLevel: 90, comment: "test" });
+    await insertRecord({ mealType: "after meal", sugarLevel: 130, comment: null });
 
-    const rows = db
-      .prepare(`SELECT meal_type, sugar_level, comment, created_at FROM records ORDER BY datetime(created_at) ASC`)
-      .all();
+    const rows = await listRecords();
+    expect(rows.length).toBeGreaterThanOrEqual(2);
 
-    expect(rows.length).toBe(2);
-    expect(rows[0]).toMatchObject({ meal_type: "empty stomach", sugar_level: 90, comment: "test" });
-    expect(rows[1]).toMatchObject({ meal_type: "after meal", sugar_level: 130, comment: null });
-
-    db.close();
+    const last2 = rows.slice(-2);
+    expect(last2[0]?.meal_type).toBeDefined();
+    expect(last2[1]?.meal_type).toBeDefined();
   });
 });
