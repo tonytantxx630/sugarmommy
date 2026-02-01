@@ -23,11 +23,9 @@ export default function GraphTab({ records }: { records: RecordRow[] }) {
 
   return (
     <div className="mt-6">
-      <div className="mb-2 text-sm text-slate-600">
-        Hover a dot to see comments. Red dots indicate out-of-range values.
-      </div>
+      <div className="mb-3 text-sm text-white/60">Hover a dot to see comments.</div>
 
-      <div className="h-[420px] w-full rounded border border-slate-200 bg-white p-3">
+      <div className="h-[440px] w-full rounded-2xl border border-white/10 bg-white/5 p-4 backdrop-blur">
         <ResponsiveContainer width="100%" height="100%">
           <LineChart margin={{ top: 10, right: 20, bottom: 30, left: 0 }}>
             <CartesianGrid strokeDasharray="3 3" />
@@ -44,11 +42,11 @@ export default function GraphTab({ records }: { records: RecordRow[] }) {
                 if (!payload || payload.length === 0) return null;
                 const p = payload[0]?.payload as unknown as RecordRow & { t: number };
                 return (
-                  <div className="rounded border border-slate-200 bg-white p-2 text-xs shadow">
-                    <div className="font-medium">{p.meal_type}</div>
-                    <div>Level: {p.sugar_level}</div>
-                    <div>Time: {formatTime(p.created_at)}</div>
-                    {p.comment ? <div className="mt-1 text-slate-700">Comment: {p.comment}</div> : null}
+                  <div className="rounded-xl border border-white/10 bg-slate-950/70 p-3 text-xs text-white shadow">
+                    <div className="font-semibold">{p.meal_type}</div>
+                    <div className="text-white/80">Level: {p.sugar_level}</div>
+                    <div className="text-white/70">Time: {formatTime(p.created_at)}</div>
+                    {p.comment ? <div className="mt-2 text-white/90">Comment: {p.comment}</div> : null}
                   </div>
                 );
               }}
