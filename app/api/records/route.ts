@@ -1,4 +1,4 @@
-import { insertRecord, listRecords, type MealType } from "@/lib/db";
+import { deleteRecordById, insertRecord, listRecords, type MealType } from "@/lib/db";
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
@@ -45,4 +45,18 @@ export async function POST(req: Request) {
   });
 
   return NextResponse.json(row, { status: 201 });
+}
+
+export async function DELETE(req: Request) {
+  const url = new URL(req.url);
+  const idStr = url.searchParams.get("id");
+  if (!idStr) return badRequest("Missing id query param", 400);
+
+  const id = Number(idStr);
+  if (!Number.isInteger(id) || id <= 0) return badRequest("Invalid id", 400);
+
+  const result = await deleteRecordById(id);
+  if (!result.deleted) return badRequest("Record not found", 404);
+
+  return NextResponse.json({ ok: true, id });
 }

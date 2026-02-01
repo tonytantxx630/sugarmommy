@@ -86,3 +86,17 @@ export async function insertRecord(input: {
   if (!typed[0]) throw new Error("Insert failed");
   return typed[0];
 }
+
+export async function deleteRecordById(id: number): Promise<{ deleted: boolean }>{
+  await ensureSchema();
+  const sql = neon(getConnString());
+
+  const rows = await sql`
+    DELETE FROM records
+    WHERE id = ${id}
+    RETURNING id;
+  `;
+
+  const deleted = Array.isArray(rows) && rows.length > 0;
+  return { deleted };
+}
